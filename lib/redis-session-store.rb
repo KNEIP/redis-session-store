@@ -6,6 +6,7 @@ require 'redis'
 # Options:
 #  :key     => Same as with the other cookie stores, key name
 #  :secret  => Encryption secret for the key
+#  :base64  => Whether the session data should be encoded or not using Base64
 #  :redis => {
 #    :host    => Redis host name, default is localhost
 #    :port    => Redis port, default is 6379
@@ -30,28 +31,35 @@ class RedisSessionStore < ActionController::Session::AbstractStore
       "#{@default_options[:key_prefix]}#{sid}"
     end
 
+    def get_session_data(env, sid)
+      return {} unless data = @redis.get(prefixed(sid))
+
+      data = Base64.decode64(data) if env['rack.session.options'][:base64]
+      Marshal.load(data)
+    rescue Errno::ECONNREFUSED
+      {}
+    end
+
     def get_session(env, sid)
       sid ||= generate_sid
-      begin
-        data = @redis.get(prefixed(sid))
-        session = data.nil? ? {} : Marshal.load(data)
-      rescue Errno::ECONNREFUSED
-        session = {}
-      end
-      [sid, session]
+      [sid, get_session_data(env, sid)]
     end
 
     def set_session(env, sid, session_data)
-      options = env['rack.session.options']
-      expiry  = options[:expire_after] || nil
+      expiry = env['rack.session.options'][:expire_after]
+
+      session_data = Marshal.dump(session_data)
+      session_data = Base64.encode64(session_data) if env['rack.session.options'][:base64]
+
       if expiry
-        @redis.setex(prefixed(sid), expiry, Marshal.dump(session_data))
+        @redis.setex(prefixed(sid), expiry, session_data)
       else
-        @redis.set(prefixed(sid), Marshal.dump(session_data))
+        @redis.set(prefixed(sid), session_data)
       end
-      return true
+
+      true
     rescue Errno::ECONNREFUSED
-      return false
+      false
     end
 
     def destroy(env)

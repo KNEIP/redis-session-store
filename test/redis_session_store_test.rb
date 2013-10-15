@@ -72,7 +72,8 @@ describe RedisSessionStore do
         :port => 26379,
         :db => 4,
         :key_prefix => 'appydoo:session:',
-        :expire_after => 60 * 60
+        :expire_after => 60 * 60,
+        :base64 => true
       }
     end
 
@@ -98,6 +99,10 @@ describe RedisSessionStore do
 
     it 'assigns the :expire_after option to @default_options' do
       default_options[:expire_after].must_equal 60 * 60
+    end
+
+    it 'assigns the :base64 option to @default_options' do
+      default_options[:base64].must_equal true
     end
   end
 end
